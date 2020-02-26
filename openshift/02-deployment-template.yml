@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: "slack-on-call"
+objects:
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    name: slack-on-call
+  spec:
+    replicas: 2
+    selector:
+      deploymentconfig: slack-on-call
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          deploymentconfig: slack-on-call
+      spec:
+        containers:
+        - env:
+          - name: SLACK_VERIFICATION_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: tokens
+                key: SLACK_VERIFICATION_TOKEN
+          - name: SLACK_TEAM_ID
+            value: "${SLACK_TEAM_ID}"
+          - name: ESCALATION_POLICY_ID
+            value: "${ESCALATION_POLICY_ID}"
+          - name:  API_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: tokens
+                key: API_TOKEN
+          - name:  AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: aws
+                key: AWS_ACCESS_KEY_ID
+          - name:  AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: aws
+                key: AWS_SECRET_ACCESS_KEY
+          image: slack-on-call:python-official
+          imagePullPolicy: Always
+          name: slack-on-call
+          livenessProbe:
+            tcpSocket:
+              port: flask
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: flask
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 30
+          ports:
+          - containerPort: 8080
+            name: flask
+            protocol: TCP
+          resources:
+            limits:
+                cpu: '1'
+                memory: 128Mi
+            requests:
+                cpu: 500m
+                memory: 64Mi
+    triggers:
+      - type: ImageChange
+        imageChangeParams:
+          automatic: true
+          containerNames:
+            - slack-on-call
+          from:
+            kind: ImageStreamTag
+            name: slack-on-call:python-36-centos7
+
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: slack-bot
+  spec:
+    ports:
+    - name: flask
+      protocol: TCP
+      port: 8080
+      targetPort: flask
+    selector:
+      deploymentconfig: slack-on-call
+
+- kind: Secret
+  apiVersion: v1
+  stringData:
+    SLACK_VERIFICATION_TOKEN: "${SLACK_VERIFICATION_TOKEN}"
+    API_TOKEN: "${API_TOKEN}"
+  metadata:
+    name: tokens
+  type: Opaque
+
+- kind: Secret
+  apiVersion: v1
+  stringData:
+    AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+    AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+  metadata:
+    name: aws
+  type: Opaque
+
+parameters:
+
+- description: "Slack Verification code"
+  name: SLACK_VERIFICATION_TOKEN
+  required: true
+
+- description: "Slack Team ID"
+  name: SLACK_TEAM_ID
+  required: true
+
+- description: "Pagerduty Escalation Policy ID"
+  name: ESCALATION_POLICY_ID
+  required: true
+
+- description: "Pager Duty API Token"
+  name: API_TOKEN
+  required: true
+
+- description: "Pager Duty API Token"
+  name: AWS_ACCESS_KEY_ID
+  required: true
+
+- description: "Pager Duty API Token"
+  name: AWS_SECRET_ACCESS_KEY
+  required: true

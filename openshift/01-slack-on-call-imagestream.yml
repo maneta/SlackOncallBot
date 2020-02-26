@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ImageStream
+metadata:
+  name: slack-on-call
+  labels:
+    app: slack-on-call
+spec:
+  tags:
+  - name: python-36-centos7
+    from:
+      kind: DockerImage
+      name: quay.io/3scale/slack-on-call:python-36-centos7
+    importPolicy:
+      scheduled: true
